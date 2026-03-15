@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Smart Yantra Tank Controller (MQTT)</title>
+    <!-- Paho MQTT client library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.1.0/paho-mqtt.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 16px;
+        }
+        .dashboard {
+            max-width: 400px;
+            width: 100%;
+            background: white;
+            border-radius: 24px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            overflow: hidden;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            font-size: 24px;
+            color: #333;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .header svg {
+            width: 28px;
+            height: 28px;
+            fill: #3498db;
+        }
+        .header .sub {
+            font-size: 14px;
+            color: #666;
+            margin-top: 4px;
+            line-height: 1.4;
+        }
+        .card {
+            background: #f9f9f9;
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+        .card h3 {
+            margin-bottom: 12px;
+            color: #2c3e50;
+            font-size: 18px;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 8px;
+        }
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .status-row:last-child {
+            border-bottom: none;
+        }
+        .status-label {
+            font-weight: 500;
+            color: #555;
+        }
+        .status-value {
+            font-weight: 600;
+        }
+        .status-good { color: #2ecc71; }
+        .status-bad { color: #e74c3c; }
+        .status-warning { color: #f39c12; }
+        .status-active { color: #3498db; }
+        .tank-container {
+            margin: 10px 0;
+        }
+        .tank-bar {
+            width: 100%;
+            height: 24px;
+            background: #ddd;
+            border-radius: 12px;
+            overflow: hidden;
+            margin: 8px 0;
+        }
+        .tank-fill {
+            height: 100%;
+            background: #3498db;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        .button-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 20px;
+        }
+        .button-row {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+        .btn {
+            border: none;
+            border-radius: 30px;
+            padding: 15px 0;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s, background-color 0.2s, color 0.2s;
+            text-align: center;
+            text-decoration: none;
+            display: block;
+        }
+        .btn:active { opacity: 0.8; }
+        .btn-test {
+            background-color: #e67e22;
+            color: white;
+            width: 100%;
+        }
+        .btn-test-active {
+            background-color: #27ae60;
+            color: white;
+            width: 100%;
+        }
+        .btn-schedule {
+            background-color: white;
+            color: #3498db;
+            border: 2px solid #3498db;
+            flex: 1;
+        }
+        .btn-history {
+            background-color: white;
+            color: #9b59b6;
+            border: 2px solid #9b59b6;
+            flex: 1;
+        }
+        .btn-rtc {
+            background-color: white;
+            color: #e74c3c;
+            border: 2px solid #e74c3c;
+            width: 50%;
+            margin: 0 auto;
+        }
+        .water-tank-label {
+            text-align: center;
+            font-size: 18px;
+            font-weight: 600;
+            margin: 10px 0 5px;
+            color: #2c3e50;
+        }
+        .connection-status {
+            text-align: center;
+            font-size: 14px;
+            margin-top: 10px;
+            padding: 5px;
+            border-radius: 20px;
+        }
+        .connected { background-color: #d4edda; color: #155724; }
+        .disconnected { background-color: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="header">
+            <h1>
+                <svg viewBox="0 0 24 24" width="28" height="28">
+                    <path d="M12 2C8 7 6 11 6 14c0 3.31 2.69 6 6 6s6-2.69 6-6c0-3-2-7-6-12z" fill="#3498db"/>
+                </svg>
+                SMART YANTRA
+            </h1>
+            <div class="sub">Unleashing Creative Tech Solutions</div>
+            <div class="sub" style="font-weight: 500;">Smart Yantra MCD</div>
+            <div id="mqttStatus" class="connection-status disconnected">Disconnected</div>
+        </div>
+        <div class="card">
+            <h3>System Status</h3>
+            <div class="status-row">
+                <span class="status-label">Motor</span>
+                <span class="status-value" id="motorStatus">--</span>
+            </div>
+            <div class="status-row">
+                <span class="status-label">Water source</span>
+                <span class="status-value" id="waterStatus">--</span>
+            </div>
+            <div class="status-row">
+                <span class="status-label">Tank full</span>
+                <span class="status-value" id="tankFullStatus">--</span>
+            </div>
+            <div class="status-row">
+                <span class="status-label">Tank level</span>
+                <span class="status-value" id="tankLevelPercent">--</span>
+            </div>
+            <div class="tank-container">
+                <div class="tank-bar">
+                    <div class="tank-fill" id="tankFill" style="width:0%"></div>
+                </div>
+            </div>
+            <div class="status-row">
+                <span class="status-label">Detection</span>
+                <span class="status-value" id="detectionStatus">--</span>
+            </div>
+            <div class="status-row">
+                <span class="status-label">Test mode</span>
+                <span class="status-value" id="testModeStatus">--</span>
+            </div>
+        </div>
+        <div class="water-tank-label">water tank</div>
+        <div class="button-grid">
+            <div class="button-row">
+                <button class="btn btn-test" id="testBtn" onclick="sendCommand('TEST_START')">Start Test</button>
+            </div>
+            <div class="button-row">
+                <button class="btn btn-schedule" onclick="sendCommand('MOTOR_ON')">Motor ON</button>
+                <button class="btn btn-history" onclick="sendCommand('MOTOR_OFF')">Motor OFF</button>
+            </div>
+            <div class="button-row">
+                <button class="btn btn-rtc" onclick="sendCommand('GET_STATUS')">Refresh</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 🟢 YAHAN APNE HIVEMQ CREDENTIALS DAALO
+        const mqttConfig = {
+            host: "6608fcf257c04e92906eeb14a4e354f7.s1.eu.hivemq.cloud", // Apna host
+            port: 8084,  // WebSocket port (8084 for TLS)
+            clientId: "web_client_" + Math.random().toString(16).substr(2, 8),
+            username: "SMART1996",      // Apna username
+            password: "Mqtt@1801",    // Apna password
+            useSSL: true,
+            commandTopic: "tank/device1/command",  // Apna command topic
+            statusTopic: "tank/device1/status"      // Apna status topic
+        };
+
+        // Create MQTT client
+        const client = new Paho.MQTT.Client(mqttConfig.host, mqttConfig.port, mqttConfig.clientId);
+
+        // Set callback handlers
+        client.onConnectionLost = onConnectionLost;
+        client.onMessageArrived = onMessageArrived;
+
+        // Connect options
+        const connectOptions = {
+            userName: mqttConfig.username,
+            password: mqttConfig.password,
+            useSSL: mqttConfig.useSSL,
+            onSuccess: onConnect,
+            onFailure: onFailure
+        };
+
+        // Connect to broker
+        client.connect(connectOptions);
+
+        function onConnect() {
+            console.log("MQTT Connected");
+            document.getElementById('mqttStatus').innerHTML = 'Connected';
+            document.getElementById('mqttStatus').className = 'connection-status connected';
+            // Subscribe to status topic
+            client.subscribe(mqttConfig.statusTopic);
+            // Request initial status
+            sendCommand('GET_STATUS');
+        }
+
+        function onFailure(err) {
+            console.log("Connection failed: ", err);
+            document.getElementById('mqttStatus').innerHTML = 'Connection failed';
+        }
+
+        function onConnectionLost(response) {
+            if (response.errorCode !== 0) {
+                console.log("Connection lost: " + response.errorMessage);
+                document.getElementById('mqttStatus').innerHTML = 'Disconnected';
+                document.getElementById('mqttStatus').className = 'connection-status disconnected';
+                // Try to reconnect after 5 seconds
+                setTimeout(() => {
+                    client.connect(connectOptions);
+                }, 5000);
+            }
+        }
+
+        function onMessageArrived(message) {
+            console.log("Message received: " + message.payloadString + " on topic " + message.destinationName);
+            if (message.destinationName === mqttConfig.statusTopic) {
+                try {
+                    const data = JSON.parse(message.payloadString);
+                    updateUI(data);
+                } catch (e) {
+                    console.error("Invalid JSON", e);
+                }
+            }
+        }
+
+        function updateUI(data) {
+            // Motor
+            let motorEl = document.getElementById('motorStatus');
+            motorEl.innerHTML = data.motor === 'on' ? '<span class="status-good">ON</span>' : '<span class="status-bad">OFF</span>';
+
+            // Water source (assuming 1=present, 0=no water)
+            let waterEl = document.getElementById('waterStatus');
+            waterEl.innerHTML = data.water == 1 ? '<span class="status-good">Present</span>' : '<span class="status-bad">No Water</span>';
+
+            // Tank full
+            let tankFullEl = document.getElementById('tankFullStatus');
+            tankFullEl.innerHTML = data.tankFull == 1 ? '<span class="status-bad">Full</span>' : '<span class="status-good">Not Full</span>';
+
+            // Tank level
+            let level = data.tankLevel || 0;
+            document.getElementById('tankLevelPercent').innerText = level + '%';
+            document.getElementById('tankFill').style.width = level + '%';
+
+            // Detection status (if available in JSON)
+            let detectEl = document.getElementById('detectionStatus');
+            if (data.detection !== undefined) {
+                detectEl.innerHTML = data.detection == 1 ? '<span class="status-warning">Checking...</span>' : 'Idle';
+            } else {
+                detectEl.innerHTML = 'Idle'; // placeholder if field missing
+            }
+
+            // Test mode
+            let testModeEl = document.getElementById('testModeStatus');
+            testModeEl.innerHTML = data.testActive == 1 ? '<span class="status-warning">Active</span>' : 'Inactive';
+
+            // Update test button appearance
+            let testBtn = document.getElementById('testBtn');
+            if (data.testActive == 1) {
+                testBtn.classList.remove('btn-test');
+                testBtn.classList.add('btn-test-active');
+                testBtn.innerText = 'Stop Test?';
+                testBtn.setAttribute('onclick', "sendCommand('TEST_STOP')");
+            } else {
+                testBtn.classList.remove('btn-test-active');
+                testBtn.classList.add('btn-test');
+                testBtn.innerText = 'Start Test';
+                testBtn.setAttribute('onclick', "sendCommand('TEST_START')");
+            }
+        }
+
+        function sendCommand(cmd) {
+            console.log("Publishing command: " + cmd);
+            let message = new Paho.MQTT.Message(cmd);
+            message.destinationName = mqttConfig.commandTopic;
+            client.send(message);
+        }
+
+        // Periodically request status (every 10 seconds)
+        setInterval(() => {
+            if (client.isConnected()) {
+                sendCommand('GET_STATUS');
+            }
+        }, 10000);
+    </script>
+</body>
+</html>
