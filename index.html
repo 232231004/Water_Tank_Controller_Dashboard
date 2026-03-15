@@ -187,6 +187,7 @@
         </div>
         <div class="card">
             <h3>System Status</h3>
+            <!-- RTC row removed because MQTT doesn't provide it -->
             <div class="status-row">
                 <span class="status-label">Motor</span>
                 <span class="status-value" id="motorStatus">--</span>
@@ -208,6 +209,7 @@
                     <div class="tank-fill" id="tankFill" style="width:0%"></div>
                 </div>
             </div>
+            <!-- Detection status (not directly available, we'll keep placeholder) -->
             <div class="status-row">
                 <span class="status-label">Detection</span>
                 <span class="status-value" id="detectionStatus">--</span>
@@ -233,16 +235,16 @@
     </div>
 
     <script>
-        // 🟢 YAHAN APNE HIVEMQ CREDENTIALS DAALO
+        // ========== MQTT Configuration (Aapke ESP32 code se li gayi) ==========
         const mqttConfig = {
-            host: "6608fcf257c04e92906eeb14a4e354f7.s1.eu.hivemq.cloud", // Apna host
-            port: 8084,  // WebSocket port (8084 for TLS)
+            host: "6608fcf257c04e92906eeb14a4e354f7.s1.eu.hivemq.cloud",
+            port: 8084,  // WebSocket secure port
             clientId: "web_client_" + Math.random().toString(16).substr(2, 8),
-            username: "SMART1996",      // Apna username
-            password: "Mqtt@1801",    // Apna password
+            username: "SMART1996",
+            password: "Mqtt@1801",
             useSSL: true,
-            commandTopic: "tank/device1/command",  // Apna command topic
-            statusTopic: "tank/device1/status"      // Apna status topic
+            commandTopic: "tank/device1/command",
+            statusTopic: "tank/device1/status"
         };
 
         // Create MQTT client
@@ -304,36 +306,32 @@
         }
 
         function updateUI(data) {
-            // Motor
+            // Motor – data.motor is "on" or "off"
             let motorEl = document.getElementById('motorStatus');
-            motorEl.innerHTML = data.motor === 'on' ? '<span class="status-good">ON</span>' : '<span class="status-bad">OFF</span>';
+            motorEl.innerHTML = (data.motor === 'on') ? '<span class="status-good">ON</span>' : '<span class="status-bad">OFF</span>';
 
-            // Water source (assuming 1=present, 0=no water)
+            // Water source (1 = Present, 0 = No Water)
             let waterEl = document.getElementById('waterStatus');
-            waterEl.innerHTML = data.water == 1 ? '<span class="status-good">Present</span>' : '<span class="status-bad">No Water</span>';
+            waterEl.innerHTML = (data.water == 1) ? '<span class="status-good">Present</span>' : '<span class="status-bad">No Water</span>';
 
-            // Tank full
+            // Tank full (1 = Full, 0 = Not Full)
             let tankFullEl = document.getElementById('tankFullStatus');
-            tankFullEl.innerHTML = data.tankFull == 1 ? '<span class="status-bad">Full</span>' : '<span class="status-good">Not Full</span>';
+            tankFullEl.innerHTML = (data.tankFull == 1) ? '<span class="status-bad">Full</span>' : '<span class="status-good">Not Full</span>';
 
-            // Tank level
+            // Tank level (0–100)
             let level = data.tankLevel || 0;
             document.getElementById('tankLevelPercent').innerText = level + '%';
             document.getElementById('tankFill').style.width = level + '%';
 
-            // Detection status (if available in JSON)
+            // Detection – we don't have direct field, so show a placeholder (maybe derive later)
             let detectEl = document.getElementById('detectionStatus');
-            if (data.detection !== undefined) {
-                detectEl.innerHTML = data.detection == 1 ? '<span class="status-warning">Checking...</span>' : 'Idle';
-            } else {
-                detectEl.innerHTML = 'Idle'; // placeholder if field missing
-            }
+            detectEl.innerHTML = 'Idle'; // You can modify if ESP32 sends detection field
 
-            // Test mode
+            // Test mode (1 = Active, 0 = Inactive)
             let testModeEl = document.getElementById('testModeStatus');
-            testModeEl.innerHTML = data.testActive == 1 ? '<span class="status-warning">Active</span>' : 'Inactive';
+            testModeEl.innerHTML = (data.testActive == 1) ? '<span class="status-warning">Active</span>' : 'Inactive';
 
-            // Update test button appearance
+            // Update test button appearance based on testActive
             let testBtn = document.getElementById('testBtn');
             if (data.testActive == 1) {
                 testBtn.classList.remove('btn-test');
@@ -355,7 +353,7 @@
             client.send(message);
         }
 
-        // Periodically request status (every 10 seconds)
+        // Periodically request status every 10 seconds
         setInterval(() => {
             if (client.isConnected()) {
                 sendCommand('GET_STATUS');
